@@ -1,6 +1,5 @@
 window.LEAGUE_CONFIG = {
-  dataApiUrl: "",
+  apiUrl: "https://mishkat-league-api.onrender.com",
   schoolName: "متوسطة وثانوية مشكاة الشعلة الأهلية",
-  refreshSeconds: 60,
-  adminKey: "1234"
+  refreshSeconds: 10
 };
