@@ -223,11 +223,18 @@
     el.className = "admin-message " + type;
   }
 
+  function isValidAdminKey(key) {
+    return key === String(cfg.adminKey || "1234");
+  }
+
   async function setScore() {
     const matchNo = +$("#matchSelect").value;
     const homeScore = +$("#homeScore").value;
     const awayScore = +$("#awayScore").value;
     const adminKey = $("#adminKey").value.trim();
+    if (!isValidAdminKey(adminKey)) {
+      return adminMsg("رمز الإدارة غير صحيح.", "error");
+    }
     if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore) || homeScore < 0 || awayScore < 0) {
       return adminMsg("أدخل نتيجة صحيحة للفريقين.", "error");
     }
@@ -253,6 +260,9 @@
   async function changeMatch(action) {
     const matchNo = +$("#matchSelect").value;
     const adminKey = $("#adminKey").value.trim();
+    if (!isValidAdminKey(adminKey)) {
+      return adminMsg("رمز الإدارة غير صحيح.", "error");
+    }
     adminMsg("جاري التنفيذ…");
     try {
       if (cfg.dataApiUrl) {
