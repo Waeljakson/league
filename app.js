@@ -209,8 +209,22 @@
     $("#awayScore").value = m.awayScore ?? "";
   }
 
+  function setActiveLeague(slug) {
+    activeLeague = slug;
+    $(".league-tab").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.league === slug);
+    });
+  }
+
+  function activateLeagueForMatch(matchNo) {
+    const league = state.leagues.find(l => (l.fixtures || []).some(m => m.matchNo === matchNo));
+    if (league) setActiveLeague(league.slug);
+  }
+
   function renderAll() {
-    state.leagues.forEach(l => { if (!Array.isArray(l.standings) || !cfg.dataApiUrl) l.standings = calcStandings(l); });
+    state.leagues.forEach(l => {
+      l.standings = calcStandings(l);
+    });
     renderStats();
     renderLeague();
     renderRules();
@@ -244,10 +258,12 @@
         await rpc("league_set_score", {p_match_no:matchNo,p_home_score:homeScore,p_away_score:awayScore,p_admin_key:adminKey});
         await loadState(false);
       } else {
-        const m = getAllFixtures().find(x => x.matchNo === matchNo);
-        const target = state.leagues.find(l => l.fixtures.some(x => x.matchNo === matchNo)).fixtures.find(x => x.matchNo === matchNo);
+        const league = state.leagues.find(l => l.fixtures.some(x => x.matchNo === matchNo));
+        const target = league.fixtures.find(x => x.matchNo === matchNo);
         Object.assign(target,{homeScore,awayScore,status:"completed"});
-        localSave(); renderAll();
+        activateLeagueForMatch(matchNo);
+        renderAll();
+        localSave();
       }
       sessionStorage.setItem("leagueAdminKey", adminKey);
       adminMsg("تم حفظ النتيجة وتحديث الترتيب.", "ok");
@@ -269,9 +285,12 @@
         await rpc(action === "reset" ? "league_reset_match" : "league_postpone_match", {p_match_no:matchNo,p_admin_key:adminKey});
         await loadState(false);
       } else {
-        const target = state.leagues.find(l => l.fixtures.some(x => x.matchNo === matchNo)).fixtures.find(x => x.matchNo === matchNo);
+        const league = state.leagues.find(l => l.fixtures.some(x => x.matchNo === matchNo));
+        const target = league.fixtures.find(x => x.matchNo === matchNo);
         target.homeScore = null; target.awayScore = null; target.status = action === "reset" ? "scheduled" : "postponed";
-        localSave(); renderAll();
+        activateLeagueForMatch(matchNo);
+        renderAll();
+        localSave();
       }
       adminMsg(action === "reset" ? "تم إلغاء النتيجة." : "تم تأجيل المباراة.", "ok");
     } catch (e) {
@@ -279,10 +298,8 @@
     }
   }
 
-  $$(".league-tab").forEach(btn => btn.addEventListener("click", () => {
-    $$(".league-tab").forEach(x => x.classList.remove("active"));
-    btn.classList.add("active");
-    activeLeague = btn.dataset.league;
+  $(".league-tab").forEach(btn => btn.addEventListener("click", () => {
+    setActiveLeague(btn.dataset.league);
     renderLeague();
   }));
   $("#adminBtn").addEventListener("click", () => {
