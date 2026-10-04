@@ -1,0 +1,12 @@
+{
+  "name": "mishkat-league",
+  "version": "1.0.0",
+  "private": true,
+  "description": "School football league dashboard for Mishkat Schools",
+  "scripts": {
+    "neon:deploy": "neon deploy"
+  },
+  "dependencies": {
+    "@neon/config": "latest"
+  }
+}
