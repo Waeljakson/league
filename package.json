@@ -4,9 +4,11 @@
   "private": true,
   "description": "School football league dashboard for Mishkat Schools",
   "scripts": {
+    "start": "node api/server.js",
     "neon:deploy": "neon deploy"
   },
   "dependencies": {
-    "@neon/config": "latest"
+    "@neon/config": "latest",
+    "redis": "^4.7.0"
   }
 }
