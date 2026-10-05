@@ -31,51 +31,52 @@ async function runOneoffNeonTask() {
       if (!school.length) throw new Error("MISHKAT_SCHOOL_NOT_FOUND");
       const schoolId = school[0].id;
 
-      const existing = await tx`
-        select id,full_name_ar,mobile,job_title_ar,linked_app_user_id
+      const staff = await tx`
+        select id,linked_app_user_id
         from public.staff_directory
-        where school_id=${schoolId}
-          and (mobile='0536880768' or full_name_ar='محمد علي عبدالعظيم')
-        order by created_at asc
+        where school_id=${schoolId} and mobile='0536880768'
         limit 1
         for update
       `;
+      if (!staff.length) throw new Error("VICE_STAFF_NOT_FOUND");
 
-      if (existing.length) {
+      await tx`
+        update public.staff_directory
+        set full_name_ar='محمد علي عبدالعظيم',
+            job_title_ar='وكيل المدرسة',
+            monthly_point_limit=500,
+            is_active=true,
+            updated_at=now()
+        where id=${staff[0].id}
+      `;
+
+      if (staff[0].linked_app_user_id) {
         await tx`
-          update public.staff_directory
-          set full_name_ar='محمد علي عبدالعظيم',
-              mobile='0536880768',
-              job_title_ar='وكيل المدرسة',
-              monthly_point_limit=500,
-              is_active=true,
-              updated_at=now()
-          where id=${existing[0].id}
+          delete from public.user_roles
+          where user_id=${staff[0].linked_app_user_id}
+            and role='TEACHER'
         `;
-      } else {
         await tx`
-          insert into public.staff_directory(
-            school_id,full_name_ar,job_title_ar,mobile,
-            monthly_point_limit,is_unlimited_budget,is_active
-          ) values (
-            ${schoolId},'محمد علي عبدالعظيم','وكيل المدرسة','0536880768',
-            500,false,true
-          )
+          insert into public.user_roles(user_id,role)
+          values(${staff[0].linked_app_user_id},'VICE_PRINCIPAL')
+          on conflict do nothing
         `;
       }
 
       return await tx`
         select sd.id,sd.full_name_ar,sd.job_title_ar,sd.mobile,
                sd.monthly_point_limit,sd.linked_app_user_id,
-               s.code as school_code,s.name_ar as school_name
+               s.code as school_code,s.name_ar as school_name,
+               coalesce(array_agg(ur.role::text order by ur.role::text)
+                 filter (where ur.role is not null),'{}') as roles
         from public.staff_directory sd
         join public.schools s on s.id=sd.school_id
-        where sd.school_id=${schoolId} and sd.mobile='0536880768'
-        order by sd.created_at asc
-        limit 1
+        left join public.user_roles ur on ur.user_id=sd.linked_app_user_id
+        where sd.id=${staff[0].id}
+        group by sd.id,s.code,s.name_ar
       `;
     });
-    console.log("ONEOFF_ADD_VICE_OK", JSON.stringify(rows));
+    console.log("ONEOFF_VICE_ROLE_OK", JSON.stringify(rows));
   } finally {
     await sql.end({ timeout: 2 });
   }
