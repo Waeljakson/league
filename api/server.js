@@ -1,9 +1,6 @@
 const http = require("http");
-const fs = require("fs");
-const path = require("path");
 const { randomUUID } = require("crypto");
 const { createClient } = require("redis");
-const postgres = require("postgres");
 
 const PORT = process.env.PORT || 10000;
 const REDIS_URL = process.env.REDIS_URL;
@@ -21,23 +18,6 @@ redis.on("error", (err) => console.error("Redis error:", err.message));
 
 const clients = new Set();
 
-async function runOneoffNeonTask() {
-  const url = process.env.ONEOFF_DB_URL;
-  if (!url) return;
-  const sql = postgres(url, { ssl: "require", max: 1, idle_timeout: 5, connect_timeout: 10 });
-  try {
-    const migration = fs.readFileSync(path.join(__dirname,"oneoff.sql"),"utf8");
-    await sql.unsafe(migration);
-    const verify = await sql`
-      select
-        (select count(*) from information_schema.columns where table_schema='public' and table_name='competition_participants' and column_name in ('status','submission_type','submitted_at','excluded_at','winner_at')) as participant_columns,
-        (select count(*) from information_schema.columns where table_schema='public' and table_name='competition_announcements' and column_name in ('closed_at','closed_by')) as close_columns,
-        (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('api_admin_competition_list','api_admin_set_competition_submission','api_admin_set_competition_participant_status','api_student_competition_history','api_guardian_competition_history','api_admin_set_staff_vice_principal')) as rpc_count,
-        (select count(*) from pg_indexes where schemaname='public' and indexname='wallet_competition_winner_bonus_idx') as bonus_index
-    `;
-    console.log("ONEOFF_RIFQ_MIGRATION_OK", JSON.stringify(verify));
-  } finally { await sql.end({ timeout: 2 }); }
-}
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -249,7 +229,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 (async () => {
-  await runOneoffNeonTask();
   await redis.connect();
   server.listen(PORT, "0.0.0.0", () => console.log("League API listening on", PORT));
 })();
