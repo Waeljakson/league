@@ -1,10 +1,12 @@
 const http = require("http");
+const { randomUUID } = require("crypto");
 const { createClient } = require("redis");
 
 const PORT = process.env.PORT || 10000;
 const REDIS_URL = process.env.REDIS_URL;
 const ADMIN_KEY = String(process.env.ADMIN_KEY || "1234");
 const STATE_KEY = "mishkat:league:results:v1";
+const VALID_TEAMS = new Set(["أول 1","أول 2","أول 3","ثاني 1","ثاني 2","ثاني 3","ثالث 1","ثالث 2"]);
 
 if (!REDIS_URL) {
   console.error("REDIS_URL is required");
@@ -24,7 +26,10 @@ function cors(res) {
 
 function json(res, status, data) {
   cors(res);
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
   res.end(JSON.stringify(data));
 }
 
@@ -37,29 +42,63 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function normalizeState(state) {
+  const next = state && typeof state === "object" ? state : {};
+  next.results ||= {};
+  next.discipline = Array.isArray(next.discipline) ? next.discipline : [];
+  next.updatedAt ||= null;
+  return next;
+}
+
 async function getState() {
   const raw = await redis.get(STATE_KEY);
-  if (!raw) return { results: {}, updatedAt: null };
-  try { return JSON.parse(raw); } catch { return { results: {}, updatedAt: null }; }
+  if (!raw) return normalizeState({});
+  try {
+    return normalizeState(JSON.parse(raw));
+  } catch {
+    return normalizeState({});
+  }
 }
 
 async function saveState(state) {
-  state.updatedAt = new Date().toISOString();
-  await redis.set(STATE_KEY, JSON.stringify(state));
+  const next = normalizeState(state);
+  next.updatedAt = new Date().toISOString();
+  await redis.set(STATE_KEY, JSON.stringify(next));
+
   for (const res of clients) {
-    try { res.write("event: update\ndata: " + JSON.stringify({ updatedAt: state.updatedAt }) + "\n\n"); } catch {}
+    try {
+      res.write("event: update\ndata: " + JSON.stringify({ updatedAt: next.updatedAt }) + "\n\n");
+    } catch {}
   }
-  return state;
+  return next;
 }
 
-function validMatchNo(value) {
+function validMatchNo(value, allowEmpty = false) {
+  if (allowEmpty && (value === null || value === undefined || value === "")) return null;
   const n = Number(value);
-  return Number.isInteger(n) && n >= 1 && n <= 16 ? n : null;
+  return Number.isInteger(n) && n >= 1 && n <= 16 ? n : false;
 }
 
 function validScore(value) {
   const n = Number(value);
   return Number.isInteger(n) && n >= 0 && n <= 99 ? n : null;
+}
+
+function validSuspension(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 10 ? n : null;
+}
+
+function cleanText(value, max = 80) {
+  return String(value || "").trim().replace(/\s+/g, " ").slice(0, max);
+}
+
+function requireAdmin(body, res) {
+  if (String(body.adminKey || "") !== ADMIN_KEY) {
+    json(res, 403, { error: "INVALID_ADMIN_KEY" });
+    return false;
+  }
+  return true;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -95,15 +134,12 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && ["/score","/reset","/postpone"].includes(url.pathname)) {
       const body = await readBody(req);
-      if (String(body.adminKey || "") !== ADMIN_KEY) {
-        return json(res, 403, { error: "INVALID_ADMIN_KEY" });
-      }
+      if (!requireAdmin(body, res)) return;
 
       const matchNo = validMatchNo(body.matchNo);
       if (!matchNo) return json(res, 400, { error: "INVALID_MATCH" });
 
       const state = await getState();
-      state.results ||= {};
 
       if (url.pathname === "/score") {
         const homeScore = validScore(body.homeScore);
@@ -120,6 +156,69 @@ const server = http.createServer(async (req, res) => {
 
       await saveState(state);
       return json(res, 200, { ok: true, result: state.results[matchNo], updatedAt: state.updatedAt });
+    }
+
+    if (req.method === "POST" && url.pathname === "/discipline/add") {
+      const body = await readBody(req);
+      if (!requireAdmin(body, res)) return;
+
+      const player = cleanText(body.player, 70);
+      const team = cleanText(body.team, 30);
+      const cardType = body.cardType === "red" ? "red" : body.cardType === "yellow" ? "yellow" : "";
+      const matchNo = validMatchNo(body.matchNo, true);
+      const suspensionMatches = validSuspension(body.suspensionMatches);
+
+      if (player.length < 2) return json(res, 400, { error: "INVALID_PLAYER" });
+      if (!VALID_TEAMS.has(team)) return json(res, 400, { error: "INVALID_TEAM" });
+      if (!cardType) return json(res, 400, { error: "INVALID_CARD" });
+      if (matchNo === false) return json(res, 400, { error: "INVALID_MATCH" });
+      if (suspensionMatches === null) return json(res, 400, { error: "INVALID_SUSPENSION" });
+
+      const state = await getState();
+      const record = {
+        id: randomUUID(),
+        player,
+        team,
+        cardType,
+        matchNo,
+        suspensionMatches,
+        remainingSuspension: suspensionMatches,
+        createdAt: new Date().toISOString()
+      };
+
+      state.discipline.push(record);
+      await saveState(state);
+      return json(res, 200, { ok: true, record, updatedAt: state.updatedAt });
+    }
+
+    if (req.method === "POST" && url.pathname === "/discipline/serve") {
+      const body = await readBody(req);
+      if (!requireAdmin(body, res)) return;
+
+      const id = cleanText(body.id, 80);
+      const state = await getState();
+      const record = state.discipline.find(r => r.id === id);
+      if (!record) return json(res, 404, { error: "DISCIPLINE_NOT_FOUND" });
+
+      record.remainingSuspension = Math.max(0, Number(record.remainingSuspension || 0) - 1);
+      await saveState(state);
+      return json(res, 200, { ok: true, record, updatedAt: state.updatedAt });
+    }
+
+    if (req.method === "POST" && url.pathname === "/discipline/delete") {
+      const body = await readBody(req);
+      if (!requireAdmin(body, res)) return;
+
+      const id = cleanText(body.id, 80);
+      const state = await getState();
+      const before = state.discipline.length;
+      state.discipline = state.discipline.filter(r => r.id !== id);
+      if (state.discipline.length === before) {
+        return json(res, 404, { error: "DISCIPLINE_NOT_FOUND" });
+      }
+
+      await saveState(state);
+      return json(res, 200, { ok: true, updatedAt: state.updatedAt });
     }
 
     return json(res, 404, { error: "NOT_FOUND" });
