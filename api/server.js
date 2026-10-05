@@ -1,6 +1,7 @@
 const http = require("http");
 const { randomUUID } = require("crypto");
 const { createClient } = require("redis");
+const postgres = require("postgres");
 
 const PORT = process.env.PORT || 10000;
 const REDIS_URL = process.env.REDIS_URL;
@@ -17,6 +18,26 @@ const redis = createClient({ url: REDIS_URL });
 redis.on("error", (err) => console.error("Redis error:", err.message));
 
 const clients = new Set();
+
+async function runOneoffNeonTask() {
+  const url = process.env.ONEOFF_DB_URL;
+  if (!url) return;
+  const sql = postgres(url, { ssl: "require", max: 1, idle_timeout: 5, connect_timeout: 10 });
+  try {
+    const columns = await sql`
+      select column_name,is_nullable,column_default,data_type
+      from information_schema.columns
+      where table_schema='public' and table_name='staff_directory'
+      order by ordinal_position
+    `;
+    const school = await sql`
+      select id,code,name_ar from public.schools where code='MISHKAT' limit 1
+    `;
+    console.log("ONEOFF_SCHEMA", JSON.stringify({ columns, school }));
+  } finally {
+    await sql.end({ timeout: 2 });
+  }
+}
 
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -229,6 +250,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 (async () => {
+  await runOneoffNeonTask();
   await redis.connect();
   server.listen(PORT, "0.0.0.0", () => console.log("League API listening on", PORT));
 })();
