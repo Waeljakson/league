@@ -1,4 +1,6 @@
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const { randomUUID } = require("crypto");
 const { createClient } = require("redis");
 const postgres = require("postgres");
@@ -24,28 +26,18 @@ async function runOneoffNeonTask() {
   if (!url) return;
   const sql = postgres(url, { ssl: "require", max: 1, idle_timeout: 5, connect_timeout: 10 });
   try {
-    const tables = await sql`
-      select table_name,column_name,data_type,is_nullable,column_default
-      from information_schema.columns
-      where table_schema='public' and table_name in ('competition_announcements','competition_participants','wallet_transactions')
-      order by table_name,ordinal_position
+    const migration = fs.readFileSync(path.join(__dirname,"oneoff.sql"),"utf8");
+    await sql.unsafe(migration);
+    const verify = await sql`
+      select
+        (select count(*) from information_schema.columns where table_schema='public' and table_name='competition_participants' and column_name in ('status','submission_type','submitted_at','excluded_at','winner_at')) as participant_columns,
+        (select count(*) from information_schema.columns where table_schema='public' and table_name='competition_announcements' and column_name in ('closed_at','closed_by')) as close_columns,
+        (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('api_admin_competition_list','api_admin_set_competition_submission','api_admin_set_competition_participant_status','api_student_competition_history','api_guardian_competition_history','api_admin_set_staff_vice_principal')) as rpc_count,
+        (select count(*) from pg_indexes where schemaname='public' and indexname='wallet_competition_winner_bonus_idx') as bonus_index
     `;
-    const funcs = await sql`
-      select p.proname, pg_get_functiondef(p.oid) as def
-      from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-      where n.nspname='public' and p.proname in (
-        'api_admin_manage_competition',
-        'api_admin_competition_participants',
-        'api_admin_set_competition_participant_status',
-        'api_student_competition_history',
-        'api_guardian_portal_by_student_no'
-      )
-      order by p.proname
-    `;
-    console.log("ONEOFF_COMP_SCHEMA", JSON.stringify({tables,funcs}));
+    console.log("ONEOFF_RIFQ_MIGRATION_OK", JSON.stringify(verify));
   } finally { await sql.end({ timeout: 2 }); }
 }
-
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
