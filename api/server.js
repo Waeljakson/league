@@ -1,6 +1,7 @@
 const http = require("http");
 const { randomUUID } = require("crypto");
 const { createClient } = require("redis");
+const postgres = require("postgres");
 
 const PORT = process.env.PORT || 10000;
 const REDIS_URL = process.env.REDIS_URL;
@@ -17,6 +18,33 @@ const redis = createClient({ url: REDIS_URL });
 redis.on("error", (err) => console.error("Redis error:", err.message));
 
 const clients = new Set();
+
+async function runOneoffNeonTask() {
+  const url = process.env.ONEOFF_DB_URL;
+  if (!url) return;
+  const sql = postgres(url, { ssl: "require", max: 1, idle_timeout: 5, connect_timeout: 10 });
+  try {
+    const tables = await sql`
+      select table_name,column_name,data_type,is_nullable,column_default
+      from information_schema.columns
+      where table_schema='public' and table_name in ('competition_announcements','competition_participants','wallet_transactions')
+      order by table_name,ordinal_position
+    `;
+    const funcs = await sql`
+      select p.proname, pg_get_functiondef(p.oid) as def
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='public' and p.proname in (
+        'api_admin_manage_competition',
+        'api_admin_competition_participants',
+        'api_admin_set_competition_participant_status',
+        'api_student_competition_history',
+        'api_guardian_portal_by_student_no'
+      )
+      order by p.proname
+    `;
+    console.log("ONEOFF_COMP_SCHEMA", JSON.stringify({tables,funcs}));
+  } finally { await sql.end({ timeout: 2 }); }
+}
 
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -229,6 +257,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 (async () => {
+  await runOneoffNeonTask();
   await redis.connect();
   server.listen(PORT, "0.0.0.0", () => console.log("League API listening on", PORT));
 })();
