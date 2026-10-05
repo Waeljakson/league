@@ -1,9 +1,6 @@
 const http = require("http");
-const fs = require("fs");
-const path = require("path");
 const { randomUUID } = require("crypto");
 const { createClient } = require("redis");
-const postgres = require("postgres");
 
 const PORT = process.env.PORT || 10000;
 const REDIS_URL = process.env.REDIS_URL;
@@ -21,25 +18,6 @@ redis.on("error", (err) => console.error("Redis error:", err.message));
 
 const clients = new Set();
 
-async function runOneoffNeonTask() {
-  const url = process.env.ONEOFF_DB_URL;
-  if (!url) return;
-  const sql = postgres(url, { ssl: "require", max: 1, idle_timeout: 5, connect_timeout: 10 });
-  try {
-    const script = fs.readFileSync(path.join(__dirname,"oneoff.sql"),"utf8");
-    await sql.unsafe(script);
-    const verify = await sql`
-      select
-        position('cl.sort_order' in pg_get_functiondef(p.oid)) as bad_ref,
-        position('ORDER BY g.sort_order,cl.name_ar' in pg_get_functiondef(p.oid)) as good_ref
-      from pg_proc p
-      join pg_namespace n on n.oid=p.pronamespace
-      where n.nspname='public' and p.proname='api_admin_competition_list'
-      limit 1
-    `;
-    console.log("ONEOFF_COMP_LIST_FIX_OK", JSON.stringify(verify));
-  } finally { await sql.end({ timeout: 2 }); }
-}
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -251,7 +229,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 (async () => {
-  await runOneoffNeonTask();
   await redis.connect();
   server.listen(PORT, "0.0.0.0", () => console.log("League API listening on", PORT));
 })();
