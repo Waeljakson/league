@@ -1,7 +1,6 @@
 const http = require("http");
 const { randomUUID } = require("crypto");
 const { createClient } = require("redis");
-const postgres = require("postgres");
 
 const PORT = process.env.PORT || 10000;
 const REDIS_URL = process.env.REDIS_URL;
@@ -19,68 +18,6 @@ redis.on("error", (err) => console.error("Redis error:", err.message));
 
 const clients = new Set();
 
-async function runOneoffNeonTask() {
-  const url = process.env.ONEOFF_DB_URL;
-  if (!url) return;
-  const sql = postgres(url, { ssl: "require", max: 1, idle_timeout: 5, connect_timeout: 10 });
-  try {
-    const rows = await sql.begin(async tx => {
-      const school = await tx`
-        select id,code,name_ar from public.schools where code='MISHKAT' limit 1
-      `;
-      if (!school.length) throw new Error("MISHKAT_SCHOOL_NOT_FOUND");
-      const schoolId = school[0].id;
-
-      const staff = await tx`
-        select id,linked_app_user_id
-        from public.staff_directory
-        where school_id=${schoolId} and mobile='0536880768'
-        limit 1
-        for update
-      `;
-      if (!staff.length) throw new Error("VICE_STAFF_NOT_FOUND");
-
-      await tx`
-        update public.staff_directory
-        set full_name_ar='محمد علي عبدالعظيم',
-            job_title_ar='وكيل المدرسة',
-            monthly_point_limit=500,
-            is_active=true,
-            updated_at=now()
-        where id=${staff[0].id}
-      `;
-
-      if (staff[0].linked_app_user_id) {
-        await tx`
-          delete from public.user_roles
-          where user_id=${staff[0].linked_app_user_id}
-            and role='TEACHER'
-        `;
-        await tx`
-          insert into public.user_roles(user_id,role)
-          values(${staff[0].linked_app_user_id},'VICE_PRINCIPAL')
-          on conflict do nothing
-        `;
-      }
-
-      return await tx`
-        select sd.id,sd.full_name_ar,sd.job_title_ar,sd.mobile,
-               sd.monthly_point_limit,sd.linked_app_user_id,
-               s.code as school_code,s.name_ar as school_name,
-               coalesce(array_agg(ur.role::text order by ur.role::text)
-                 filter (where ur.role is not null),'{}') as roles
-        from public.staff_directory sd
-        join public.schools s on s.id=sd.school_id
-        left join public.user_roles ur on ur.user_id=sd.linked_app_user_id
-        where sd.id=${staff[0].id}
-        group by sd.id,s.code,s.name_ar
-      `;
-    });
-    console.log("ONEOFF_VICE_ROLE_OK", JSON.stringify(rows));
-  } finally {
-    await sql.end({ timeout: 2 });
-  }
-}
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -292,7 +229,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 (async () => {
-  await runOneoffNeonTask();
   await redis.connect();
   server.listen(PORT, "0.0.0.0", () => console.log("League API listening on", PORT));
 })();
