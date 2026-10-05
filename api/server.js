@@ -24,21 +24,62 @@ async function runOneoffNeonTask() {
   if (!url) return;
   const sql = postgres(url, { ssl: "require", max: 1, idle_timeout: 5, connect_timeout: 10 });
   try {
-    const columns = await sql`
-      select column_name,is_nullable,column_default,data_type
-      from information_schema.columns
-      where table_schema='public' and table_name='staff_directory'
-      order by ordinal_position
-    `;
-    const school = await sql`
-      select id,code,name_ar from public.schools where code='MISHKAT' limit 1
-    `;
-    console.log("ONEOFF_SCHEMA", JSON.stringify({ columns, school }));
+    const rows = await sql.begin(async tx => {
+      const school = await tx`
+        select id,code,name_ar from public.schools where code='MISHKAT' limit 1
+      `;
+      if (!school.length) throw new Error("MISHKAT_SCHOOL_NOT_FOUND");
+      const schoolId = school[0].id;
+
+      const existing = await tx`
+        select id,full_name_ar,mobile,job_title_ar,linked_app_user_id
+        from public.staff_directory
+        where school_id=${schoolId}
+          and (mobile='0536880768' or full_name_ar='محمد علي عبدالعظيم')
+        order by created_at asc
+        limit 1
+        for update
+      `;
+
+      if (existing.length) {
+        await tx`
+          update public.staff_directory
+          set full_name_ar='محمد علي عبدالعظيم',
+              mobile='0536880768',
+              job_title_ar='وكيل المدرسة',
+              monthly_point_limit=500,
+              is_active=true,
+              updated_at=now()
+          where id=${existing[0].id}
+        `;
+      } else {
+        await tx`
+          insert into public.staff_directory(
+            school_id,full_name_ar,job_title_ar,mobile,
+            monthly_point_limit,is_unlimited_budget,is_active
+          ) values (
+            ${schoolId},'محمد علي عبدالعظيم','وكيل المدرسة','0536880768',
+            500,false,true
+          )
+        `;
+      }
+
+      return await tx`
+        select sd.id,sd.full_name_ar,sd.job_title_ar,sd.mobile,
+               sd.monthly_point_limit,sd.linked_app_user_id,
+               s.code as school_code,s.name_ar as school_name
+        from public.staff_directory sd
+        join public.schools s on s.id=sd.school_id
+        where sd.school_id=${schoolId} and sd.mobile='0536880768'
+        order by sd.created_at asc
+        limit 1
+      `;
+    });
+    console.log("ONEOFF_ADD_VICE_OK", JSON.stringify(rows));
   } finally {
     await sql.end({ timeout: 2 });
   }
 }
-
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
