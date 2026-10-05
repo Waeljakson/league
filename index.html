@@ -19,7 +19,7 @@
         <p>متوسطة وثانوية مشكاة الشعلة الأهلية — 1448هـ</p>
       </div>
     </div>
-    <button id="adminBtn" class="ghost-btn" type="button">إدارة النتائج</button>
+    <button id="adminBtn" class="ghost-btn" type="button">إدارة البطولة</button>
   </header>
 
   <main class="page">
@@ -76,6 +76,32 @@
       </div>
     </section>
 
+
+    <section class="card section-card discipline-card">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">الانضباط والعقوبات</span>
+          <h3>الإنذارات والكروت الحمراء والإيقافات</h3>
+        </div>
+      </div>
+      <div class="discipline-stats">
+        <article><span class="mini-card yellow"></span><strong id="yellowCount">0</strong><small>إنذارات</small></article>
+        <article><span class="mini-card red"></span><strong id="redCount">0</strong><small>كروت حمراء</small></article>
+        <article><span class="ban-icon">⛔</span><strong id="suspendedCount">0</strong><small>لاعبون موقوفون</small></article>
+      </div>
+      <div class="table-wrap">
+        <table class="discipline-table">
+          <thead>
+            <tr>
+              <th>اللاعب</th><th>الفريق</th><th>🟨</th><th>🟥</th><th>الإيقاف المتبقي</th><th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody id="disciplineTable"></tbody>
+        </table>
+      </div>
+      <p id="disciplineEmpty" class="empty-state">لا توجد إنذارات أو إيقافات مسجلة حتى الآن.</p>
+    </section>
+
     <section class="card rules">
       <div class="section-title">
         <div><span class="eyebrow">تعليمات البطولة</span><h3>قواعد المشاركة</h3></div>
@@ -93,10 +119,16 @@
 
   <dialog id="adminDialog" class="admin-dialog">
     <form method="dialog" class="dialog-head">
-      <div><span class="eyebrow">لوحة المشرف</span><h3>اعتماد نتيجة مباراة</h3></div>
+      <div><span class="eyebrow">لوحة المشرف</span><h3>إدارة البطولة</h3></div>
       <button class="icon-btn" value="cancel" aria-label="إغلاق">×</button>
     </form>
-    <div class="dialog-body">
+
+    <div class="admin-tabs">
+      <button class="admin-tab active" type="button" data-panel="resultsPanel">النتائج</button>
+      <button class="admin-tab" type="button" data-panel="disciplinePanel">الإنذارات والإيقافات</button>
+    </div>
+
+    <div id="resultsPanel" class="dialog-body admin-panel active">
       <label>رمز الإدارة
         <input id="adminKey" type="password" autocomplete="current-password" placeholder="أدخل رمز الإدارة" />
       </label>
@@ -115,9 +147,49 @@
         <button id="postponeBtn" class="danger-btn" type="button">تأجيل المباراة</button>
       </div>
     </div>
+
+    <div id="disciplinePanel" class="dialog-body admin-panel">
+      <label>رمز الإدارة
+        <input id="disciplineAdminKey" type="password" autocomplete="current-password" placeholder="أدخل رمز الإدارة" />
+      </label>
+
+      <div class="form-grid">
+        <label>الفريق
+          <select id="disciplineTeam"></select>
+        </label>
+        <label>اسم اللاعب
+          <input id="disciplinePlayer" type="text" maxlength="70" placeholder="اسم اللاعب" />
+        </label>
+      </div>
+
+      <div class="form-grid">
+        <label>البطاقة
+          <select id="disciplineCardType">
+            <option value="yellow">إنذار 🟨</option>
+            <option value="red">كارت أحمر 🟥</option>
+          </select>
+        </label>
+        <label>المباراة
+          <select id="disciplineMatch"></select>
+        </label>
+      </div>
+
+      <label>عدد مباريات الإيقاف
+        <input id="disciplineSuspension" type="number" min="0" max="10" value="0" inputmode="numeric" />
+      </label>
+
+      <div id="disciplineMessage" class="admin-message"></div>
+      <button id="addDisciplineBtn" class="primary-btn" type="button">تسجيل الإنذار / العقوبة</button>
+
+      <div class="discipline-admin-head">
+        <strong>السجل الحالي</strong>
+        <small>يمكن خصم مباراة بعد تنفيذ الإيقاف أو حذف السجل.</small>
+      </div>
+      <div id="disciplineAdminList" class="discipline-admin-list"></div>
+    </div>
   </dialog>
 
-  <script src="./config.js?v=20261004-live"></script>
-  <script src="./app.js?v=20261004-live"></script>
+  <script src="./config.js?v=20261005-discipline"></script>
+  <script src="./app.js?v=20261005-discipline"></script>
 </body>
 </html>
