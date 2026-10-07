@@ -2,20 +2,20 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <meta name="theme-color" content="#071b15" />
   <title>شاشة دوري المشكاة</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./screen.css?v=20261007-1" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./screen.css?v=20261007-tv2" />
 </head>
 <body>
   <main class="screen-shell">
     <header class="screen-header">
       <div class="school">
         <div class="ball">⚽</div>
-        <div>
+        <div class="school-copy">
           <span>بطولة كرة القدم المدرسية</span>
           <h1>دوري المشكاة المدرسي</h1>
           <p>متوسطة وثانوية مشكاة الشعلة الأهلية — 1448هـ</p>
@@ -41,7 +41,7 @@
       </div>
 
       <div id="matchStage" class="match-stage">
-        <div class="team team-home">
+        <div class="team">
           <span class="team-tag">الفريق الأول</span>
           <strong id="homeTeam">—</strong>
         </div>
@@ -55,27 +55,25 @@
           <div id="matchStatus" class="match-status">VS</div>
         </div>
 
-        <div class="team team-away">
+        <div class="team">
           <span class="team-tag">الفريق الثاني</span>
           <strong id="awayTeam">—</strong>
         </div>
       </div>
 
-      <div id="noMatch" class="no-match" hidden>
-        لا توجد مباراة مقررة اليوم.
-      </div>
+      <div id="noMatch" class="no-match" hidden>لا توجد مباراة مقررة اليوم.</div>
     </section>
 
-    <section class="dashboard-grid">
+    <section class="content-grid">
       <article class="board-card standings-card">
         <div class="card-title">
           <div>
             <span class="section-kicker">الترتيب المباشر</span>
             <h3 id="standingsTitle">جدول الدوري</h3>
           </div>
-          <span class="update-pill">يتحدث تلقائيًا</span>
+          <span class="update-pill">LIVE</span>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap standings-wrap">
           <table>
             <thead>
               <tr>
@@ -87,16 +85,51 @@
         </div>
       </article>
 
-      <article class="board-card results-card">
-        <div class="card-title">
-          <div>
-            <span class="section-kicker">آخر النتائج</span>
-            <h3>نتائج البطولة</h3>
+      <div class="side-stack">
+        <article class="board-card tomorrow-card">
+          <div class="mini-title">
+            <span class="section-kicker">مباراة الغد</span>
+            <span id="tomorrowMeta">—</span>
           </div>
-        </div>
-        <div id="recentResults" class="recent-results"></div>
-        <div id="noResults" class="empty-results">لم تُسجل نتائج بعد.</div>
-      </article>
+          <div id="tomorrowMatch" class="tomorrow-match">
+            <strong id="tomorrowHome">—</strong>
+            <span class="tomorrow-vs">VS</span>
+            <strong id="tomorrowAway">—</strong>
+          </div>
+          <div id="tomorrowEmpty" class="small-empty" hidden>لا توجد مباراة غدًا</div>
+        </article>
+
+        <article class="board-card discipline-card">
+          <div class="card-title compact-title">
+            <div>
+              <span class="section-kicker">الانضباط</span>
+              <h3>الكروت والإيقافات</h3>
+            </div>
+            <div class="card-totals">
+              <span class="yellow-total">🟨 <b id="yellowTotal">0</b></span>
+              <span class="red-total">🟥 <b id="redTotal">0</b></span>
+            </div>
+          </div>
+          <div class="table-wrap discipline-wrap">
+            <table class="discipline-table">
+              <thead>
+                <tr><th>اللاعب</th><th>الفريق</th><th>🟨</th><th>🟥</th><th>إيقاف</th></tr>
+              </thead>
+              <tbody id="disciplineBody"></tbody>
+            </table>
+          </div>
+          <div id="disciplineEmpty" class="small-empty">لا توجد كروت مسجلة.</div>
+        </article>
+
+        <article class="board-card results-card">
+          <div class="mini-title">
+            <span class="section-kicker">آخر النتائج</span>
+            <span>تتحدث تلقائيًا</span>
+          </div>
+          <div id="recentResults" class="recent-results"></div>
+          <div id="noResults" class="small-empty">لم تُسجل نتائج بعد.</div>
+        </article>
+      </div>
     </section>
 
     <footer>
@@ -105,7 +138,7 @@
     </footer>
   </main>
 
-  <script src="./config.js?v=20261007-screen"></script>
-  <script src="./screen.js?v=20261007-1"></script>
+  <script src="./config.js?v=20261007-tv2"></script>
+  <script src="./screen.js?v=20261007-tv2"></script>
 </body>
 </html>
