@@ -49,3 +49,7 @@
   .form-grid{grid-template-columns:1fr}
   .discipline-admin-row{grid-template-columns:1fr}
 }
+
+.top-actions{display:flex;align-items:center;gap:8px}
+.screen-link{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+@media(max-width:520px){.top-actions{gap:5px}.screen-link{font-size:11px;padding:9px 8px}}
