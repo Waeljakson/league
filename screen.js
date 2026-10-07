@@ -37,15 +37,25 @@
   ];
 
   let results = {};
+  let discipline = [];
   let lastUpdated = null;
   let source = null;
 
+  function isoLocal(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth()+1).padStart(2,"0");
+    const d = String(date.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }
+
   function todayIso() {
+    return isoLocal(new Date());
+  }
+
+  function tomorrowIso() {
     const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,"0");
-    const day = String(d.getDate()).padStart(2,"0");
-    return `${y}-${m}-${day}`;
+    d.setDate(d.getDate()+1);
+    return isoLocal(d);
   }
 
   function formatClock() {
@@ -80,8 +90,8 @@
       h.played++; a.played++;
       h.gf += Number(m.homeScore); h.ga += Number(m.awayScore);
       a.gf += Number(m.awayScore); a.ga += Number(m.homeScore);
-      if (m.homeScore > m.awayScore) { h.won++; a.lost++; h.points += 3; }
-      else if (m.homeScore < m.awayScore) { a.won++; h.lost++; a.points += 3; }
+      if (Number(m.homeScore) > Number(m.awayScore)) { h.won++; a.lost++; h.points += 3; }
+      else if (Number(m.homeScore) < Number(m.awayScore)) { a.won++; h.lost++; a.points += 3; }
       else { h.drawn++; a.drawn++; h.points++; a.points++; }
     }
 
@@ -90,22 +100,28 @@
       .sort((a,b) => b.points-a.points || b.gd-a.gd || b.gf-a.gf || a.team.localeCompare(b.team,"ar"));
   }
 
+  function allFixtures() {
+    return leagues.flatMap(league => league.fixtures.map(match => ({league,match})));
+  }
+
   function getTodayContext() {
     const today = todayIso();
-    for (const league of leagues) {
-      const match = league.fixtures.find(m => m.date === today);
-      if (match) return {league,match,isToday:true};
-    }
+    const todayItem = allFixtures().find(x => x.match.date === today);
+    if (todayItem) return {...todayItem,isToday:true};
 
-    const all = leagues.flatMap(league => league.fixtures.map(match => ({league,match})));
-    const upcoming = all
+    const upcoming = allFixtures()
       .filter(x => x.match.status === "scheduled" && x.match.date > today)
       .sort((a,b) => a.match.date.localeCompare(b.match.date))[0];
 
     if (upcoming) return {...upcoming,isToday:false};
 
-    const latest = all.sort((a,b) => b.match.date.localeCompare(a.match.date))[0];
+    const latest = allFixtures().sort((a,b) => b.match.date.localeCompare(a.match.date))[0];
     return latest ? {...latest,isToday:false} : null;
+  }
+
+  function getTomorrowContext() {
+    const date = tomorrowIso();
+    return allFixtures().find(x => x.match.date === date) || null;
   }
 
   function renderMainMatch(context) {
@@ -146,9 +162,26 @@
     }
   }
 
+  function renderTomorrow() {
+    const item = getTomorrowContext();
+    if (!item) {
+      $("#tomorrowMatch").hidden = true;
+      $("#tomorrowEmpty").hidden = false;
+      $("#tomorrowMeta").textContent = tomorrowIso();
+      return;
+    }
+
+    $("#tomorrowMatch").hidden = false;
+    $("#tomorrowEmpty").hidden = true;
+    $("#tomorrowHome").textContent = item.match.home;
+    $("#tomorrowAway").textContent = item.match.away;
+    $("#tomorrowMeta").textContent = `#${item.match.matchNo} — ${item.league.name}`;
+  }
+
   function renderStandings(league) {
     $("#standingsTitle").textContent = league.name;
     const rows = calcStandings(league);
+
     $("#standingsBody").innerHTML = rows.map((r,i) => `<tr class="${i===0?"leader":""}">
       <td><span class="rank">${i+1}</span></td>
       <td>${r.team}</td>
@@ -161,18 +194,62 @@
     </tr>`).join("");
   }
 
+  function aggregateDiscipline() {
+    const map = new Map();
+
+    for (const r of discipline || []) {
+      const player = String(r.player || "").trim();
+      const team = String(r.team || "").trim();
+      if (!player || !team) continue;
+
+      const key = team + "||" + player.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {player,team,yellow:0,red:0,suspension:0});
+      }
+
+      const row = map.get(key);
+      if (r.cardType === "yellow") row.yellow++;
+      if (r.cardType === "red") row.red++;
+      row.suspension += Math.max(0, Number(r.remainingSuspension || 0));
+    }
+
+    return [...map.values()].sort((a,b) =>
+      b.suspension-a.suspension ||
+      b.red-a.red ||
+      b.yellow-a.yellow ||
+      a.player.localeCompare(b.player,"ar")
+    );
+  }
+
+  function renderDiscipline() {
+    const rows = aggregateDiscipline();
+    $("#yellowTotal").textContent = (discipline || []).filter(r => r.cardType === "yellow").length;
+    $("#redTotal").textContent = (discipline || []).filter(r => r.cardType === "red").length;
+
+    const visible = rows.slice(0,6);
+    $("#disciplineBody").innerHTML = visible.map(r => `<tr>
+      <td>${r.player}</td>
+      <td>${r.team}</td>
+      <td>${r.yellow}</td>
+      <td>${r.red}</td>
+      <td class="${r.suspension>0?"suspended":""}">${r.suspension}</td>
+    </tr>`).join("");
+
+    $("#disciplineEmpty").style.display = rows.length ? "none" : "block";
+    $("#disciplineBody").closest(".discipline-wrap").style.display = rows.length ? "block" : "none";
+  }
+
   function renderRecentResults() {
     const completed = leagues
       .flatMap(league => league.fixtures.map(match => ({...match,leagueName:league.name})))
       .filter(m => m.status === "completed")
       .sort((a,b) => b.date.localeCompare(a.date) || b.matchNo-a.matchNo)
-      .slice(0,5);
+      .slice(0,4);
 
     $("#recentResults").innerHTML = completed.map(m => `<div class="result-row">
       <span class="team-name home">${m.home}</span>
       <span class="result-score">${m.homeScore} - ${m.awayScore}</span>
       <span class="team-name away">${m.away}</span>
-      <span class="result-meta">مباراة #${m.matchNo} — ${m.day}</span>
     </div>`).join("");
 
     $("#noResults").style.display = completed.length ? "none" : "block";
@@ -182,7 +259,9 @@
     applyResults();
     const context = getTodayContext();
     renderMainMatch(context);
+    renderTomorrow();
     renderStandings(context?.league || leagues[0]);
+    renderDiscipline();
     renderRecentResults();
 
     $("#lastUpdate").textContent = lastUpdated
@@ -196,6 +275,7 @@
     const el = $("#liveBadge");
     const text = el.querySelector("span");
     el.classList.remove("online","offline");
+
     if (mode === "online") {
       el.classList.add("online");
       text.textContent = "LIVE — متصل";
@@ -217,14 +297,13 @@
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(apiBase + "/state", {
-        cache:"no-store",
-        signal:controller.signal
-      });
+      const res = await fetch(apiBase + "/state", {cache:"no-store",signal:controller.signal});
       clearTimeout(timeout);
       if (!res.ok) throw new Error("STATE");
+
       const payload = await res.json();
       results = payload.results || {};
+      discipline = Array.isArray(payload.discipline) ? payload.discipline : [];
       lastUpdated = payload.updatedAt || new Date().toISOString();
       setConnection("online");
       render();
@@ -236,6 +315,7 @@
 
   function startEvents() {
     if (!apiBase || !window.EventSource) return;
+
     try {
       source?.close();
       source = new EventSource(apiBase + "/events");
