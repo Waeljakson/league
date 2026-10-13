@@ -19,7 +19,7 @@ jobs:
         run: |
           rm -rf function-dist league-function.zip
           mkdir -p function-dist
-          npx esbuild functions/leagueapi/index.js             --bundle             --platform=node             --format=esm             --target=node24             --external:pg-native             --outfile=function-dist/index.js
+          npx esbuild functions/leagueapi/index.js --bundle --platform=node --format=esm --target=node24 --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);' --outfile=function-dist/index.js
           printf '{"type":"module"}\n' > function-dist/package.json
           cd function-dist
           zip -q ../league-function.zip index.js package.json
