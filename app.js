@@ -692,10 +692,9 @@
     disciplineAction(btn.dataset.disciplineAction, btn.dataset.id);
   });
 
-  loadState().then(startLiveUpdates);
-
+  loadState();
   setInterval(
     () => loadState(false),
-    Math.max(10, Number(cfg.refreshSeconds) || 10) * 1000
+    Math.max(2, Number(cfg.refreshSeconds) || 2) * 1000
   );
 })();
