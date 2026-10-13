@@ -1,0 +1,27 @@
+name: Diagnose League API
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-league-api.yml'
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Neon Function
+        shell: bash
+        run: |
+          set -x
+          API="https://br-small-resonance-b5109dtn-leagueapi.compute.c-7.us-east-2.aws.neon.tech"
+          echo "=== DIAGNOSTIC GET ==="
+          curl -sS -i --max-time 30 "$API/diagnostic" || true
+          echo
+          echo "=== PREFLIGHT ==="
+          curl -sS -i --max-time 30 -X OPTIONS "$API/score"             -H 'Origin: https://waeljakson.github.io'             -H 'Access-Control-Request-Method: POST'             -H 'Access-Control-Request-Headers: content-type' || true
+          echo
+          echo "=== POST WRONG KEY ==="
+          curl -sS -i --max-time 30 -X POST "$API/score"             -H 'Origin: https://waeljakson.github.io'             -H 'Content-Type: application/json'             --data '{"matchNo":8,"homeScore":1,"awayScore":0,"adminKey":"wrong"}' || true
+          echo
+          echo "=== POST INVALID MATCH WITH VALID KEY ==="
+          curl -sS -i --max-time 30 -X POST "$API/score"             -H 'Origin: https://waeljakson.github.io'             -H 'Content-Type: application/json'             --data '{"matchNo":999,"homeScore":1,"awayScore":0,"adminKey":"1234"}' || true
