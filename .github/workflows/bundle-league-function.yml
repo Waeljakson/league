@@ -1,0 +1,28 @@
+name: Bundle League Neon Function
+on:
+  push:
+    paths:
+      - 'functions/leagueapi/**'
+      - '.github/workflows/bundle-league-function.yml'
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bundler and runtime dependencies
+        run: npm install --no-save esbuild@0.25.10 hono@4.9.0 pg@8.16.3
+      - name: Bundle function
+        run: |
+          rm -rf function-dist league-function.zip
+          mkdir -p function-dist
+          npx esbuild functions/leagueapi/index.js             --bundle             --platform=node             --format=esm             --target=node24             --external:pg-native             --outfile=function-dist/index.js
+          printf '{"type":"module"}\n' > function-dist/package.json
+          cd function-dist
+          zip -q ../league-function.zip index.js package.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: league-function
+          path: league-function.zip
+          retention-days: 1
