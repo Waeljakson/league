@@ -336,6 +336,6 @@
 
   formatClock();
   setInterval(formatClock, 1000);
-  loadState().then(startEvents);
-  setInterval(loadState, 10000);
+  loadState();
+  setInterval(loadState, Math.max(2, Number(cfg.refreshSeconds) || 2) * 1000);
 })();
