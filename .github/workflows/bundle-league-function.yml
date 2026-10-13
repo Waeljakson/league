@@ -1,4 +1,6 @@
 name: Bundle League Neon Function
+permissions:
+  contents: write
 on:
   push:
     paths:
@@ -26,3 +28,12 @@ jobs:
           name: league-function
           path: league-function.zip
           retention-days: 1
+      - name: Publish deployment bundle
+        run: |
+          mkdir -p build
+          base64 -w0 league-function.zip > build/league-function.b64
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build/league-function.b64
+          git commit -m "Update bundled Neon function" || exit 0
+          git push
