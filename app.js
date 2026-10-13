@@ -57,6 +57,7 @@
   let state = clone(baseState);
   let activeLeague = "first-middle";
   let eventSource = null;
+  let scoreInputsDirty = false;
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -362,6 +363,7 @@
     const select = $("#matchSelect");
     const current = select.value;
     const all = getAllFixtures().sort((a,b) => a.matchNo-b.matchNo);
+    const preserveDraft = Boolean($("#adminDialog")?.open && scoreInputsDirty);
 
     select.innerHTML = all.map(m =>
       `<option value="${m.matchNo}">#${m.matchNo} — ${m.home} × ${m.away} (${m.day})</option>`
@@ -370,7 +372,17 @@
     if (current && all.some(m => String(m.matchNo) === String(current))) {
       select.value = current;
     }
-    updateSelectedMatch();
+
+    if (preserveDraft) {
+      const no = Number(select.value);
+      const m = getAllFixtures().find(x => x.matchNo === no);
+      if (m) {
+        $("#homeLabel").textContent = m.home;
+        $("#awayLabel").textContent = m.away;
+      }
+    } else {
+      updateSelectedMatch();
+    }
   }
 
   function updateSelectedMatch() {
@@ -382,6 +394,7 @@
     $("#awayLabel").textContent = m.away;
     $("#homeScore").value = m.homeScore ?? "";
     $("#awayScore").value = m.awayScore ?? "";
+    scoreInputsDirty = false;
   }
 
   function renderDisciplineTeamOptions() {
@@ -496,6 +509,7 @@
 
     try {
       await apiPost("/score", {matchNo,homeScore,awayScore,adminKey});
+      scoreInputsDirty = false;
       sessionStorage.setItem("leagueAdminKey", adminKey);
       $("#disciplineAdminKey").value = adminKey;
       await loadState(false);
@@ -523,6 +537,7 @@
 
     try {
       await apiPost(action === "reset" ? "/reset" : "/postpone", {matchNo,adminKey});
+      scoreInputsDirty = false;
       sessionStorage.setItem("leagueAdminKey", adminKey);
       $("#disciplineAdminKey").value = adminKey;
       await loadState(false);
@@ -661,6 +676,7 @@
   );
 
   $("#adminBtn").addEventListener("click", () => {
+    scoreInputsDirty = false;
     const savedKey = sessionStorage.getItem("leagueAdminKey") || "";
     $("#adminKey").value = savedKey;
     $("#disciplineAdminKey").value = savedKey;
@@ -673,6 +689,8 @@
   });
 
   $("#matchSelect").addEventListener("change", updateSelectedMatch);
+  $("#homeScore").addEventListener("input", () => { scoreInputsDirty = true; });
+  $("#awayScore").addEventListener("input", () => { scoreInputsDirty = true; });
   $("#saveScoreBtn").addEventListener("click", setScore);
   $("#resetMatchBtn").addEventListener("click", () => changeMatch("reset"));
   $("#postponeBtn").addEventListener("click", () => changeMatch("postpone"));
