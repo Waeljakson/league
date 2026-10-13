@@ -1,0 +1,11 @@
+name: Verify League State
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-league-state.yml'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get state
+        run: curl -sS -i --max-time 30 "https://br-small-resonance-b5109dtn-leagueapi.compute.c-7.us-east-2.aws.neon.tech/state"
