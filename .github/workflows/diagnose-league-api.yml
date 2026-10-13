@@ -14,8 +14,8 @@ jobs:
         run: |
           set -x
           API="https://br-small-resonance-b5109dtn-leagueapi.compute.c-7.us-east-2.aws.neon.tech"
-          echo "=== DIAGNOSTIC GET ==="
-          curl -sS -i --max-time 30 "$API/diagnostic" || true
+          echo "=== HEALTH GET ==="
+          curl -sS -i --max-time 30 "$API/health" || true\n          echo\n          echo "=== STATE GET ==="\n          curl -sS -i --max-time 30 "$API/state" || true
           echo
           echo "=== PREFLIGHT ==="
           curl -sS -i --max-time 30 -X OPTIONS "$API/score"             -H 'Origin: https://waeljakson.github.io'             -H 'Access-Control-Request-Method: POST'             -H 'Access-Control-Request-Headers: content-type' || true
