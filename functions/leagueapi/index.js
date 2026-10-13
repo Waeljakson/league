@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { Pool } from "pg";
+import { neon } from "@neondatabase/serverless";
 import { randomUUID } from "node:crypto";
 
 const app = new Hono();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
+const sql = neon(process.env.DATABASE_URL);
 const ADMIN_KEY = "1234";
 
 app.use("*", async (c, next) => {
@@ -45,9 +45,12 @@ function cleanText(value, max = 80) {
 }
 
 async function reconstructDiscipline() {
-  const { rows } = await pool.query(
-    "select action,payload,created_at from audit_log where action in ('discipline_add','discipline_serve','discipline_delete') order by id asc"
-  );
+  const rows = await sql`
+    select action,payload,created_at
+    from audit_log
+    where action in ('discipline_add','discipline_serve','discipline_delete')
+    order by id asc
+  `;
 
   const map = new Map();
 
@@ -81,9 +84,11 @@ app.get("/", (c) => c.json({ ok: true, service: "mishkat-league-api" }));
 app.get("/health", (c) => c.json({ ok: true }));
 
 app.get("/state", async (c) => {
-  const { rows } = await pool.query(
-    "select match_no,home_score,away_score,status,updated_at from matches order by match_no"
-  );
+  const rows = await sql`
+    select match_no,home_score,away_score,status,updated_at
+    from matches
+    order by match_no
+  `;
 
   const results = {};
   let updatedAt = null;
@@ -118,10 +123,12 @@ app.post("/score", async (c) => {
     return c.json({ error: "INVALID_SCORE" }, 400);
   }
 
-  const { rows } = await pool.query(
-    "update matches set home_score=$1,away_score=$2,status='completed',updated_at=now() where match_no=$3 returning match_no,home_score,away_score,status,updated_at",
-    [homeScore, awayScore, matchNo]
-  );
+  const rows = await sql`
+    update matches
+    set home_score=${homeScore}, away_score=${awayScore}, status='completed', updated_at=now()
+    where match_no=${matchNo}
+    returning match_no,home_score,away_score,status,updated_at
+  `;
 
   if (!rows.length) return c.json({ error: "INVALID_MATCH" }, 404);
 
@@ -139,10 +146,12 @@ app.post("/reset", async (c) => {
   const matchNo = validMatchNo(body.matchNo);
   if (!matchNo) return c.json({ error: "INVALID_MATCH" }, 400);
 
-  const { rows } = await pool.query(
-    "update matches set home_score=null,away_score=null,status='scheduled',updated_at=now() where match_no=$1 returning match_no,status,updated_at",
-    [matchNo]
-  );
+  const rows = await sql`
+    update matches
+    set home_score=null, away_score=null, status='scheduled', updated_at=now()
+    where match_no=${matchNo}
+    returning match_no,status,updated_at
+  `;
 
   if (!rows.length) return c.json({ error: "INVALID_MATCH" }, 404);
   return c.json({ ok: true, result: rows[0], updatedAt: rows[0].updated_at });
@@ -155,10 +164,12 @@ app.post("/postpone", async (c) => {
   const matchNo = validMatchNo(body.matchNo);
   if (!matchNo) return c.json({ error: "INVALID_MATCH" }, 400);
 
-  const { rows } = await pool.query(
-    "update matches set home_score=null,away_score=null,status='postponed',updated_at=now() where match_no=$1 returning match_no,status,updated_at",
-    [matchNo]
-  );
+  const rows = await sql`
+    update matches
+    set home_score=null, away_score=null, status='postponed', updated_at=now()
+    where match_no=${matchNo}
+    returning match_no,status,updated_at
+  `;
 
   if (!rows.length) return c.json({ error: "INVALID_MATCH" }, 404);
   return c.json({ ok: true, result: rows[0], updatedAt: rows[0].updated_at });
@@ -202,10 +213,14 @@ app.post("/discipline/add", async (c) => {
     createdAt: new Date().toISOString()
   };
 
-  await pool.query(
-    "insert into audit_log(action,match_id,payload) values ('discipline_add',(select id from matches where match_no=$1),$2::jsonb)",
-    [matchNo, JSON.stringify(record)]
-  );
+  await sql`
+    insert into audit_log(action,match_id,payload)
+    values (
+      'discipline_add',
+      (select id from matches where match_no=${matchNo}),
+      ${JSON.stringify(record)}::jsonb
+    )
+  `;
 
   return c.json({ ok: true, record });
 });
@@ -217,10 +232,10 @@ app.post("/discipline/serve", async (c) => {
   const id = cleanText(body.id, 80);
   if (!id) return c.json({ error: "DISCIPLINE_NOT_FOUND" }, 404);
 
-  await pool.query(
-    "insert into audit_log(action,payload) values ('discipline_serve',$1::jsonb)",
-    [JSON.stringify({ id })]
-  );
+  await sql`
+    insert into audit_log(action,payload)
+    values ('discipline_serve', ${JSON.stringify({ id })}::jsonb)
+  `;
 
   return c.json({ ok: true });
 });
@@ -232,10 +247,10 @@ app.post("/discipline/delete", async (c) => {
   const id = cleanText(body.id, 80);
   if (!id) return c.json({ error: "DISCIPLINE_NOT_FOUND" }, 404);
 
-  await pool.query(
-    "insert into audit_log(action,payload) values ('discipline_delete',$1::jsonb)",
-    [JSON.stringify({ id })]
-  );
+  await sql`
+    insert into audit_log(action,payload)
+    values ('discipline_delete', ${JSON.stringify({ id })}::jsonb)
+  `;
 
   return c.json({ ok: true });
 });
